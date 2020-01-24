@@ -5,16 +5,17 @@ class UnigramModel(object):
     """A unigram language model"""
     
     def __init__(self, xTrain , param):
-        self.unigramTrainWordCount = 0
+        self.totalTrainWordCount = 0
         self.unigramTrainFrequency = dict()
         self.wordFrequency = dict()
+        self.actualTrainWordCount = 0
         # used for unseen words in training vocabularies
         self.UNK = "unk"
 
         # sentence start and end
         self.SENTENCE_START = "<s>"
         self.SENTENCE_END = "</s>"
-        self.vocabulary = [self.UNK]
+        self.vocabulary = []
 
         self.testwordCount = 0
         self.testBigramCount = 0
@@ -32,36 +33,37 @@ class UnigramModel(object):
         wordsSkipped = 0
         wordsToRemoveFromUnigramFrequency = []
         for word in self.wordFrequency:
-            if self.wordFrequency[word] < param["oovfrequency"] and wordsSkipped <= 1:
+            if self.wordFrequency[word] <= param["oovfrequency"]: # and wordsSkipped <= 500:
                 wordsSkipped = wordsSkipped + 1
             elif(word not  in self.vocabulary):
                 self.vocabulary.append(word)
 
-    def CalculateUnigramSentenceProbability(self, sentence):
+    def CalculateUnigramSentenceProbability(self, sentence , param):
         words = sentence.split()
         sentenceLogProbability = 0 
         for word in words:
-            sentenceLogProbability = sentenceLogProbability + self.CalculateUnigramWordProbability(word)
+            if(word != self.SENTENCE_END):
+                sentenceLogProbability = sentenceLogProbability + self.CalculateUnigramWordProbability(word , param)
 
         return sentenceLogProbability
 
-    def CalculateUnigramWordProbability(self , word):
+    def CalculateUnigramWordProbability(self , word , param):
         numerator = self.unigramTrainFrequency.get(self.UNK,0)
-        denominator = self.unigramTrainWordCount
+        denominator = self.actualTrainWordCount
         if(word in self.vocabulary):
             numerator = self.unigramTrainFrequency[word]
 
-        numerator = numerator + 1
-        denominator = denominator + len(self.unigramTrainFrequency)
-        print("probability of ",word,numerator / denominator)
+        numerator = numerator + param["smoothingFactor"]
+        denominator = denominator + (param["smoothingFactor"] * len(self.unigramTrainFrequency))
+        #print("probability of ",word,numerator / denominator)
         return math.log(numerator / denominator,2)
 
 
-    def CalculatePerplexity(self, xDev):
+    def CalculatePerplexity(self, xDev , param):
         corpusLogProbability = 0
         self.CountWordsTest(xDev)
         for sentence in xDev:
-            corpusLogProbability = corpusLogProbability + self.CalculateUnigramSentenceProbability(sentence)
+            corpusLogProbability = corpusLogProbability + self.CalculateUnigramSentenceProbability(sentence , param)
 
         print("corpus log probability: ", corpusLogProbability)
         print("unigram count: ", self.testwordCount)
@@ -73,7 +75,9 @@ class UnigramModel(object):
             words = sentence.split()
             for word in words:
                 self.wordFrequency[word] = self.wordFrequency.get(word, 0) + 1
-                self.unigramTrainWordCount = self.unigramTrainWordCount + 1
+                self.totalTrainWordCount = self.totalTrainWordCount + 1
+                if(word != self.SENTENCE_END):
+                    self.actualTrainWordCount = self.actualTrainWordCount + 1
 
     def CountWordsTest(self, xDev):
         for sentence in xDev:
@@ -109,9 +113,10 @@ class UnigramModel(object):
         for sentence in xTrainRaw:
             words = sentence.split()
             for word in words:
-                self.unigramTrainFrequency[word] = self.unigramTrainFrequency.get(word, 0) + 1
+                if (word != self.SENTENCE_END):
+                    self.unigramTrainFrequency[word] = self.unigramTrainFrequency.get(word, 0) + 1
             i = i + 1
-        print("wordcount train" , self.unigramTrainWordCount)
+        print("wordcount train" , self.totalTrainWordCount)
 
 class BigramModel(UnigramModel):
     """A unigram language model"""
@@ -122,17 +127,17 @@ class BigramModel(UnigramModel):
         self.bigramTrainCount = 0
         self.NormalizeBigramTrain(xTrain,param)
 
-    def CalculatePerplexity(self, xDev):
+    def CalculatePerplexity(self, xDev , param):
         corpusLogProbability = 0
         self.CountWordsTest(xDev)
         for sentence in xDev:
-            corpusLogProbability = corpusLogProbability + self.CalculateBigramSentenceProbability(sentence)
+            corpusLogProbability = corpusLogProbability + self.CalculateBigramSentenceProbability(sentence, param)
         print("corpus log probability: ", corpusLogProbability)
         print("Bigram count: ", self.testBigramCount)
 
-        return math.pow(2, -(corpusLogProbability / self.testBigramCount))
+        return math.pow(2, -(corpusLogProbability / self.testwordCount))
 
-    def CalculateBigramSentenceProbability(self, sentence):
+    def CalculateBigramSentenceProbability(self, sentence, param):
         words = sentence.split()
         sentenceLogProbability = 0 
         for i in range(len(words)):
@@ -141,18 +146,18 @@ class BigramModel(UnigramModel):
                 conditionWord = words[i - 1]
 
             if(i == 0):
-                sentenceLogProbability = sentenceLogProbability + self.CalculateUnigramWordProbability(activeWord)
+                sentenceLogProbability = sentenceLogProbability + self.CalculateUnigramWordProbability(activeWord , param)
             else:
-                sentenceLogProbability = sentenceLogProbability + self.CalculateBigramWordProbability(activeWord,conditionWord)
+                sentenceLogProbability = sentenceLogProbability + self.CalculateBigramWordProbability(activeWord,conditionWord, param)
 
         return sentenceLogProbability
 
-    def CalculateBigramWordProbability(self , activeWord, conditionWord):
+    def CalculateBigramWordProbability(self , activeWord, conditionWord, param):
         frequencyLookupKey = conditionWord + "_" + activeWord
-        numerator = self.bigramTrainFrequency.get(frequencyLookupKey,0) + 1
-        denominator = self.unigramTrainFrequency.get(conditionWord,0) + len(self.unigramTrainFrequency)
+        numerator = self.bigramTrainFrequency.get(frequencyLookupKey,0) + param["smoothingFactor"]
+        denominator = self.unigramTrainFrequency.get(conditionWord,0) + (param["smoothingFactor"] * len(self.unigramTrainFrequency))
 
-        print("probability of ",frequencyLookupKey,numerator / denominator)
+        #print("probability of ",frequencyLookupKey,numerator / denominator)
 
         return  math.log(numerator / denominator,2)
 
@@ -176,18 +181,18 @@ class TrigramModel(BigramModel):
         self.trigramTrainCount = 0
         self.NormalizeTrigramTrain(xTrain,param)
 
-    def CalculatePerplexity(self, xDev):
+    def CalculatePerplexity(self, xDev , param):
 
         corpusLogProbability = 0
         wordCount = self.CountWordsTest(xDev)
         for sentence in xDev:
-            corpusLogProbability = corpusLogProbability + self.CalculateTrigramSentenceProbability(sentence)
+            corpusLogProbability = corpusLogProbability + self.CalculateTrigramSentenceProbability(sentence, param)
 
         print("corpus log probability: ", corpusLogProbability)
         print("Trigram count: ", self.testTrigramCount)
-        return math.pow(2, -(corpusLogProbability / self.testTrigramCount))
+        return math.pow(2, -(corpusLogProbability / self.testwordCount))
 
-    def CalculateTrigramSentenceProbability(self, sentence):
+    def CalculateTrigramSentenceProbability(self, sentence , param):
         words = sentence.split()
         sentenceLogProbability = 0 
         for i in range(len(words)):
@@ -198,21 +203,22 @@ class TrigramModel(BigramModel):
                 conditionWord2 = words[i - 2]
 
             if(i == 0):
-                sentenceLogProbability = sentenceLogProbability + self.CalculateUnigramWordProbability(activeWord)
+                sentenceLogProbability = sentenceLogProbability + self.CalculateUnigramWordProbability(activeWord , param)
             elif(i == 1):
-                sentenceLogProbability = sentenceLogProbability + self.CalculateBigramWordProbability(activeWord,conditionWord1)
+                sentenceLogProbability = sentenceLogProbability + self.CalculateBigramWordProbability(activeWord,conditionWord1 , param)
             else:
-                sentenceLogProbability = sentenceLogProbability + self.CalculateTrigramWordProbability(activeWord,conditionWord1,conditionWord2)
+                sentenceLogProbability = sentenceLogProbability + self.CalculateTrigramWordProbability(activeWord,conditionWord1,conditionWord2, param)
 
         return sentenceLogProbability
 
-    def CalculateTrigramWordProbability(self , activeWord, conditionWord1, conditionWord2):
+    def CalculateTrigramWordProbability(self , activeWord, conditionWord1, conditionWord2 , param):
         triGramfrequencyLookupKey = conditionWord2 + "_" + conditionWord1 + "_" + activeWord
         biGramfrequencyLookupKey = conditionWord2 + "_" + conditionWord1
-        numerator = self.trigramFrequency.get(triGramfrequencyLookupKey,0) + 1
-        denominator = self.bigramTrainFrequency.get(biGramfrequencyLookupKey,0) + len(self.unigramTrainFrequency)
+        numerator = self.trigramFrequency.get(triGramfrequencyLookupKey,0) + param["smoothingFactor"]
+        denominator = self.bigramTrainFrequency.get(biGramfrequencyLookupKey,0) + (len(self.unigramTrainFrequency) * + param["smoothingFactor"])
 
-        print("probability of ",triGramfrequencyLookupKey,numerator/denominator)
+        #print("probability of
+        #",triGramfrequencyLookupKey,numerator/denominator)
 
         return  math.log(numerator / denominator,2)
 
