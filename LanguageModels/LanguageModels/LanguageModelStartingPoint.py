@@ -10,9 +10,15 @@ def LoadRawData(path):
     return lines;
 
 param = {}
-param["oovfrequency"] = 1
-xTrainRaw = LoadRawData("TestData/brown.train.txt")
-xDevRaw = LoadRawData("TestData/brown.dev.txt")
+param["oovfrequency"] = 0
+#xTrainRaw = LoadRawData("TestData/brown.train.txt")
+#xDevRaw = LoadRawData("TestData/brown.dev.txt")
+
+#xTrainRaw = LoadRawData("TestData/brown.dev.txt")
+#xDevRaw = xTrainRaw
+
+xTrainRaw = LoadRawData("TestData/small.txt")
+xDevRaw = LoadRawData("TestData/small.test.txt")
 
 unigramModel = UnigramModel(xTrainRaw,param)
 unigramPerplexity = unigramModel.CalculatePerplexity(xDevRaw)
