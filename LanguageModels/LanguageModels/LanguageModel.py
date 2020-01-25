@@ -42,14 +42,13 @@ class UnigramModel(object):
         words = sentence.split()
         sentenceLogProbability = 0 
         for word in words:
-            if(word != self.SENTENCE_END):
-                sentenceLogProbability = sentenceLogProbability + self.CalculateUnigramWordProbability(word , param)
+            sentenceLogProbability = sentenceLogProbability + self.CalculateUnigramWordProbability(word , param)
 
         return sentenceLogProbability
 
     def CalculateUnigramWordProbability(self , word , param):
         numerator = self.unigramTrainFrequency.get(self.UNK,0)
-        denominator = self.actualTrainWordCount
+        denominator = self.totalTrainWordCount
         if(word in self.vocabulary):
             numerator = self.unigramTrainFrequency[word]
 
@@ -76,8 +75,6 @@ class UnigramModel(object):
             for word in words:
                 self.wordFrequency[word] = self.wordFrequency.get(word, 0) + 1
                 self.totalTrainWordCount = self.totalTrainWordCount + 1
-                if(word != self.SENTENCE_END):
-                    self.actualTrainWordCount = self.actualTrainWordCount + 1
 
     def CountWordsTest(self, xDev):
         for sentence in xDev:
@@ -86,14 +83,8 @@ class UnigramModel(object):
             for word in words:
                 wordCount = wordCount + 1
             self.testwordCount = self.testwordCount + wordCount
-            if(wordCount > 1):
-                self.testBigramCount = self.testBigramCount + (wordCount - 1)
-            if(wordCount > 2):
-                self.testTrigramCount = self.testTrigramCount + (wordCount - 2)
 
         print("wordcount test" , self.testwordCount)
-        print("bigram count test" , self.testBigramCount)
-        print("trigram count test" , self.testTrigramCount)
         
     def TokenizeTrain(self, xTrainRaw):
         i = 0
@@ -103,7 +94,6 @@ class UnigramModel(object):
             for word in sentence.split():
                 if word not in self.vocabulary:
                     sentence = sentence.replace(" " + word + " ", " " + self.UNK + " ")
-            sentence = sentence + " " + self.SENTENCE_END
             tokenizedTrain.append(sentence)  
 
         return tokenizedTrain
@@ -113,7 +103,7 @@ class UnigramModel(object):
         for sentence in xTrainRaw:
             words = sentence.split()
             for word in words:
-                if (word != self.SENTENCE_END):
+                if (word != self.SENTENCE_END) and (word!=self.SENTENCE_START):
                     self.unigramTrainFrequency[word] = self.unigramTrainFrequency.get(word, 0) + 1
             i = i + 1
         print("wordcount train" , self.totalTrainWordCount)
@@ -121,10 +111,18 @@ class UnigramModel(object):
 class BigramModel(UnigramModel):
     """A unigram language model"""
     
-    def __init__(self, xTrain, param):
-        UnigramModel.__init__(self, xTrain, param)
+    def __init__(self, xTrain, param , FromTrigram= False):
         self.bigramTrainFrequency = dict()
         self.bigramTrainCount = 0
+        self.wordFrequency = dict()
+        self.totalTrainWordCount = 0
+        self.vocabulary = []
+        self.testwordCount = 0
+        self.unigramTrainFrequency = dict()
+
+        self.CountWordsTrain(xTrain, param)
+        self.InitializeVocabulary(param)
+        xTrain = self.TokenizeBigramTrain(xTrain)
         self.NormalizeBigramTrain(xTrain,param)
 
     def CalculatePerplexity(self, xDev , param):
@@ -133,7 +131,6 @@ class BigramModel(UnigramModel):
         for sentence in xDev:
             corpusLogProbability = corpusLogProbability + self.CalculateBigramSentenceProbability(sentence, param)
         print("corpus log probability: ", corpusLogProbability)
-        print("Bigram count: ", self.testBigramCount)
 
         return math.pow(2, -(corpusLogProbability / self.testwordCount))
 
@@ -144,10 +141,6 @@ class BigramModel(UnigramModel):
             activeWord = words[i]
             if(i > 0):
                 conditionWord = words[i - 1]
-
-            if(i == 0):
-                sentenceLogProbability = sentenceLogProbability + self.CalculateUnigramWordProbability(activeWord , param)
-            else:
                 sentenceLogProbability = sentenceLogProbability + self.CalculateBigramWordProbability(activeWord,conditionWord, param)
 
         return sentenceLogProbability
@@ -166,19 +159,48 @@ class BigramModel(UnigramModel):
         for sentence in xTrainRaw:
             words = sentence.split()
             for i in range(len(words)):
+                self.unigramTrainFrequency[words[i]] = self.unigramTrainFrequency.get(words[i], 0) + 1
                 if (i > 0):
                     self.bigramTrainCount = self.bigramTrainCount + 1
                     key = words[i - 1] + "_" + words[i]
                     self.bigramTrainFrequency[key] = self.bigramTrainFrequency.get(key,0) + 1
         print("bigram train" , self.bigramTrainCount)
 
+    def TokenizeBigramTrain(self, xTrainRaw, FromTrigram = False):
+        i = 0
+        tokenizedTrain = []
+        for sentence in xTrainRaw:
+            sentence = sentence.rstrip()
+            for word in sentence.split():
+                if word not in self.vocabulary:
+                    sentence = sentence.replace(" " + word + " ", " " + "unk" + " ")
+            sentence = "<s>" + " " + sentence
+            if(FromTrigram == True):
+                sentence = self.SENTENCE_START + " " + sentence
+            sentence = sentence + " " + "</s>"
+
+            tokenizedTrain.append(sentence)  
+
+        return tokenizedTrain
+
 class TrigramModel(BigramModel):
     """A unigram language model"""
     
     def __init__(self, xTrain, param):
-        BigramModel.__init__(self, xTrain, param)
         self.trigramFrequency = dict()
+        self.bigramTrainFrequency = dict()
+        self.bigramTrainCount  = 0
         self.trigramTrainCount = 0
+        self.wordFrequency = dict()
+        self.totalTrainWordCount = 0
+        self.vocabulary = []
+        self.testwordCount = 0
+        self.testBigramCount = 0
+        self.unigramTrainFrequency = dict()
+
+        self.CountWordsTrain(xTrain, param)
+        self.InitializeVocabulary(param)
+        xTrain = self.TokenizeTrigramTrain(xTrain)
         self.NormalizeTrigramTrain(xTrain,param)
 
     def CalculatePerplexity(self, xDev , param):
@@ -189,24 +211,16 @@ class TrigramModel(BigramModel):
             corpusLogProbability = corpusLogProbability + self.CalculateTrigramSentenceProbability(sentence, param)
 
         print("corpus log probability: ", corpusLogProbability)
-        print("Trigram count: ", self.testTrigramCount)
         return math.pow(2, -(corpusLogProbability / self.testwordCount))
 
     def CalculateTrigramSentenceProbability(self, sentence , param):
         words = sentence.split()
         sentenceLogProbability = 0 
         for i in range(len(words)):
-            activeWord = words[i]
-            if(i > 0):
-                conditionWord1 = words[i - 1]
             if(i > 1):
+                activeWord = words[i]
+                conditionWord1 = words[i - 1]
                 conditionWord2 = words[i - 2]
-
-            if(i == 0):
-                sentenceLogProbability = sentenceLogProbability + self.CalculateUnigramWordProbability(activeWord , param)
-            elif(i == 1):
-                sentenceLogProbability = sentenceLogProbability + self.CalculateBigramWordProbability(activeWord,conditionWord1 , param)
-            else:
                 sentenceLogProbability = sentenceLogProbability + self.CalculateTrigramWordProbability(activeWord,conditionWord1,conditionWord2, param)
 
         return sentenceLogProbability
@@ -227,8 +241,28 @@ class TrigramModel(BigramModel):
         for sentence in xTrainRaw:
             words = sentence.split()
             for i in range(len(words)):
+                self.unigramTrainFrequency[words[i]] = self.unigramTrainFrequency.get(words[i], 0) + 1
+                if(i>0):
+                    self.bigramTrainCount = self.bigramTrainCount + 1
+                    key = words[i - 1] + "_" + words[i]
+                    self.bigramTrainFrequency[key] = self.bigramTrainFrequency.get(key,0) + 1
                 if (i > 1):
                     self.trigramTrainCount = self.trigramTrainCount + 1
                     key = words[i - 2] + "_" + words[i - 1] + "_" + words[i]
                     self.trigramFrequency[key] = self.trigramFrequency.get(key,0) + 1
         print("trigram train" , self.trigramTrainCount)
+
+    def TokenizeTrigramTrain(self, xTrainRaw):
+        i = 0
+        tokenizedTrain = []
+        for sentence in xTrainRaw:
+            sentence = sentence.rstrip()
+            for word in sentence.split():
+                if word not in self.vocabulary:
+                    sentence = sentence.replace(" " + word + " ", " " + "unk" + " ")
+            sentence = "<s>" + " " + "<s>" + " " + sentence
+            sentence = sentence + " " + "</s>"
+
+            tokenizedTrain.append(sentence)  
+
+        return tokenizedTrain
