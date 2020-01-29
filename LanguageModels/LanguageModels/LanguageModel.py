@@ -72,18 +72,13 @@ class UnigramModel(object):
     def CountWordsTrain(self, xTrainRaw,param):
         for sentence in xTrainRaw:
             words = sentence.split()
+            self.totalTrainWordCount = self.totalTrainWordCount + len(words)
             for word in words:
                 self.wordFrequency[word] = self.wordFrequency.get(word, 0) + 1
-                self.totalTrainWordCount = self.totalTrainWordCount + 1
 
     def CountWordsTest(self, xDev):
         for sentence in xDev:
-            wordCount = 0
-            words = sentence.split()
-            for word in words:
-                wordCount = wordCount + 1
-            self.testwordCount = self.testwordCount + wordCount
-
+            self.testwordCount = self.testwordCount + len(sentence.split())
         print("wordcount test" , self.testwordCount)
         
     def TokenizeTrain(self, xTrainRaw):
@@ -103,7 +98,7 @@ class UnigramModel(object):
         for sentence in xTrainRaw:
             words = sentence.split()
             for word in words:
-                if (word != self.SENTENCE_END) and (word!=self.SENTENCE_START):
+                if (word != self.SENTENCE_END) and (word != self.SENTENCE_START):
                     self.unigramTrainFrequency[word] = self.unigramTrainFrequency.get(word, 0) + 1
             i = i + 1
         print("wordcount train" , self.totalTrainWordCount)
@@ -111,7 +106,7 @@ class UnigramModel(object):
 class BigramModel(UnigramModel):
     """A unigram language model"""
     
-    def __init__(self, xTrain, param , FromTrigram= False):
+    def __init__(self, xTrain, param , FromTrigram=False):
         self.bigramTrainFrequency = dict()
         self.bigramTrainCount = 0
         self.wordFrequency = dict()
@@ -122,8 +117,8 @@ class BigramModel(UnigramModel):
 
         self.CountWordsTrain(xTrain, param)
         self.InitializeVocabulary(param)
-        xTrain = self.TokenizeBigramTrain(xTrain)
-        self.NormalizeBigramTrain(xTrain,param)
+        xTrainTokenized = self.TokenizeBigramTrain(xTrain)
+        self.NormalizeBigramTrain(xTrainTokenized,param)
 
     def CalculatePerplexity(self, xDev , param):
         corpusLogProbability = 0
@@ -148,7 +143,7 @@ class BigramModel(UnigramModel):
     def CalculateBigramWordProbability(self , activeWord, conditionWord, param):
         frequencyLookupKey = conditionWord + "_" + activeWord
         numerator = self.bigramTrainFrequency.get(frequencyLookupKey,0) + param["smoothingFactor"]
-        denominator = self.unigramTrainFrequency.get(conditionWord,0) + (param["smoothingFactor"] * len(self.unigramTrainFrequency))
+        denominator = self.unigramTrainFrequency.get(conditionWord,0) + (param["smoothingFactor"] * len(self.vocabulary))
 
         #print("probability of ",frequencyLookupKey,numerator / denominator)
 
@@ -166,7 +161,7 @@ class BigramModel(UnigramModel):
                     self.bigramTrainFrequency[key] = self.bigramTrainFrequency.get(key,0) + 1
         print("bigram train" , self.bigramTrainCount)
 
-    def TokenizeBigramTrain(self, xTrainRaw, FromTrigram = False):
+    def TokenizeBigramTrain(self, xTrainRaw, FromTrigram=False):
         i = 0
         tokenizedTrain = []
         for sentence in xTrainRaw:
@@ -184,16 +179,16 @@ class BigramModel(UnigramModel):
         return tokenizedTrain
 
 class TrigramModel(BigramModel):
-    """A unigram language model"""
+    """A TrigramModel language model"""
     
     def __init__(self, xTrain, param):
         self.trigramFrequency = dict()
         self.bigramTrainFrequency = dict()
-        self.bigramTrainCount  = 0
+        self.bigramTrainCount = 0
         self.trigramTrainCount = 0
         self.wordFrequency = dict()
         self.totalTrainWordCount = 0
-        self.vocabulary = []
+        self.vocabulary = ["</s>","</s>"]
         self.testwordCount = 0
         self.testBigramCount = 0
         self.unigramTrainFrequency = dict()
@@ -202,6 +197,7 @@ class TrigramModel(BigramModel):
         self.InitializeVocabulary(param)
         xTrain = self.TokenizeTrigramTrain(xTrain)
         self.NormalizeTrigramTrain(xTrain,param)
+
 
     def CalculatePerplexity(self, xDev , param):
 
@@ -228,21 +224,47 @@ class TrigramModel(BigramModel):
     def CalculateTrigramWordProbability(self , activeWord, conditionWord1, conditionWord2 , param):
         triGramfrequencyLookupKey = conditionWord2 + "_" + conditionWord1 + "_" + activeWord
         biGramfrequencyLookupKey = conditionWord2 + "_" + conditionWord1
-        numerator = self.trigramFrequency.get(triGramfrequencyLookupKey,0) + param["smoothingFactor"]
-        denominator = self.bigramTrainFrequency.get(biGramfrequencyLookupKey,0) + (len(self.unigramTrainFrequency) * + param["smoothingFactor"])
+        if(param["uselinearInterpolation"] == False):
+            numerator = self.trigramFrequency.get(triGramfrequencyLookupKey,0) + param["smoothingFactor"]
+            denominator = self.bigramTrainFrequency.get(biGramfrequencyLookupKey,0) + (len(self.vocabulary) * param["smoothingFactor"])
+            return  math.log(numerator / denominator,2)
+        else:
+            probabilityWithLinearInterpolation = 0
 
-        #print("probability of
-        #",triGramfrequencyLookupKey,numerator/denominator)
+            # trigram part
+            numerator = self.trigramFrequency.get(triGramfrequencyLookupKey,0) 
+            denominator = self.bigramTrainFrequency.get(biGramfrequencyLookupKey,0)
 
-        return  math.log(numerator / denominator,2)
+            if(denominator != 0):
+                probabilityWithLinearInterpolation = probabilityWithLinearInterpolation + (param["lambda3"] * (numerator / denominator))
+            
+            #bigram part
+            numerator = self.bigramTrainFrequency.get(conditionWord1 + "_" + activeWord,0) 
+            denominator = self.unigramTrainFrequency.get(conditionWord1,0)
+
+            if(denominator != 0):
+                probabilityWithLinearInterpolation = probabilityWithLinearInterpolation + (param["lambda2"] * (numerator / denominator))
+
+            #unigram part
+            numerator = self.unigramTrainFrequency.get("unk") 
+            if(activeWord in self.vocabulary):
+                numerator = self.unigramTrainFrequency.get(activeWord) 
+            denominator = self.totalTrainWordCount
+
+            if(denominator != 0):
+                probabilityWithLinearInterpolation = probabilityWithLinearInterpolation + (param["lambda1"] * (numerator / denominator))
+
+            return math.log(probabilityWithLinearInterpolation, 2)
 
     def NormalizeTrigramTrain(self, xTrainRaw,param):
         i = 0
+        self.totalTrainWordCount = 0
         for sentence in xTrainRaw:
             words = sentence.split()
+            self.totalTrainWordCount = self.totalTrainWordCount + len(words)
             for i in range(len(words)):
                 self.unigramTrainFrequency[words[i]] = self.unigramTrainFrequency.get(words[i], 0) + 1
-                if(i>0):
+                if(i > 0):
                     self.bigramTrainCount = self.bigramTrainCount + 1
                     key = words[i - 1] + "_" + words[i]
                     self.bigramTrainFrequency[key] = self.bigramTrainFrequency.get(key,0) + 1
@@ -251,6 +273,7 @@ class TrigramModel(BigramModel):
                     key = words[i - 2] + "_" + words[i - 1] + "_" + words[i]
                     self.trigramFrequency[key] = self.trigramFrequency.get(key,0) + 1
         print("trigram train" , self.trigramTrainCount)
+        print("trigram train word count" , self.totalTrainWordCount)
 
     def TokenizeTrigramTrain(self, xTrainRaw):
         i = 0
