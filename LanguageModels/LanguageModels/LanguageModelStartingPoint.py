@@ -51,7 +51,7 @@ unigramModel = UnigramModel(xTrainRaw,param)
 unigramPerplexity = unigramModel.CalculatePerplexity(xDevRaw , param)
 print("Unigram perplexity",unigramPerplexity)
 print("done with unigram")
-s
+
 xTrainRaw = LoadRawData("TestData/brown.train.txt")
 xDevRaw = LoadRawData("TestData/brown.test.txt")
 xDevRaw = TokenizeBigramDev(xDevRaw)
