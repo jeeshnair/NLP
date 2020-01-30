@@ -65,7 +65,7 @@ class UnigramModel(object):
             corpusLogProbability = corpusLogProbability + self.CalculateUnigramSentenceProbability(sentence , param)
 
         print("corpus log probability: ", corpusLogProbability)
-        print("unigram count: ", self.testwordCount)
+        #print("unigram count: ", self.testwordCount)
 
         return math.pow(2, -(corpusLogProbability / self.testwordCount))
 
@@ -79,7 +79,7 @@ class UnigramModel(object):
     def CountWordsTest(self, xDev):
         for sentence in xDev:
             self.testwordCount = self.testwordCount + len(sentence.split())
-        print("wordcount test" , self.testwordCount)
+        #print("wordcount test" , self.testwordCount)
         
     def TokenizeTrain(self, xTrainRaw):
         i = 0
@@ -101,7 +101,7 @@ class UnigramModel(object):
                 if (word != self.SENTENCE_END) and (word != self.SENTENCE_START):
                     self.unigramTrainFrequency[word] = self.unigramTrainFrequency.get(word, 0) + 1
             i = i + 1
-        print("wordcount train" , self.totalTrainWordCount)
+        #print("wordcount train" , self.totalTrainWordCount)
 
 class BigramModel(UnigramModel):
     """A unigram language model"""
@@ -159,7 +159,6 @@ class BigramModel(UnigramModel):
                     self.bigramTrainCount = self.bigramTrainCount + 1
                     key = words[i - 1] + "_" + words[i]
                     self.bigramTrainFrequency[key] = self.bigramTrainFrequency.get(key,0) + 1
-        print("bigram train" , self.bigramTrainCount)
 
     def TokenizeBigramTrain(self, xTrainRaw, FromTrigram=False):
         i = 0
