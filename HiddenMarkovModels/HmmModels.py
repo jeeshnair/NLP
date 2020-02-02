@@ -119,19 +119,33 @@ class HmmBigram(object):
         denominator = self.TagCount[tag]
         return math.log(numerator / denominator, 2)
 
-    def FindBestTag(self,sentence,param):
+    def FindBestTagSequence(self,sentence,param):
         
+        words = sentence.split()
+        wordCount = len(words)
+        tagCount = len(self.AllTags)
         scores = []
         backTrack = []
 
-        # Start from 1 because the first row belongs to start
-        for i in range(1, len(words)):
-            scoresByTag = dict()
-            backTrackByTag = dict()
+        scores = [[0.0 for x in range(wordCount)] for y in range(tagCount)]
+        backTrack = [[0 for x in range(wordCount)] for y in range(tagCount)]
 
-            for currentTag in self.AllTags:
-                for previousTag in self.AllTags:
-                    score = scoresByTag[t - 1][tag1] + self.GetTransitionProbability((tag1, tag)) + self.bigramHMM.getEmissProb((currObs, tag))
-                    if score > scoresByTag[t][tag]:
-                      scoresByTag[t][tag] = score
-                      backTrackByTag[t][tag] = tag1
+        # Start from 1 because the first row belongs to start
+        for word in range(1, wordCount):
+            for currentTag in range(tagCount):
+                for previousTag in range(tagCount):
+                    score = scores[previousTag][word-1] + self.GetTransitionProbability(self.AllTags[previousTag], self.AllTags[currentTag], param) + self.GetEmissionProbability(elf.AllTags[currentTag], words[i])
+                    if score > scores[currentTag][word]:
+                      scores[currentTag][word] = score
+                      backTrack[currentTag][word] = previousTag
+
+        bestTagIndex = 0
+        for tag in range(1, tagCount):
+            if scoreMatrix[wordCount-1][tag] > scoreMatrix[wordCount-1][tag-1]:
+                bestTagIndex=tag
+
+        tags = []
+        tagIndex = bestTagIndex
+        for t in range(wordCount,0 , -1):
+            tags.append(self.AllTags[tagIndex])
+            tagIndex = backpointer[tagIndex][t]
