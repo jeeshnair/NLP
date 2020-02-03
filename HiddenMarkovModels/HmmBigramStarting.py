@@ -23,6 +23,21 @@ xTrainRaw = LoadRawData("C:\\source\\nlp\\HiddenMarkovModels\\TestData\\twt.trai
 xTrainParsed = LoadJsonTokens(xTrainRaw)
 
 param = {}
+param["oovfrequency"] = 1
+param["useHalfTrainingData"]  = False
+param["lambda2"]  = 0.5
+param["lambda1"]  = 0.5
+param["smoothingfactor"] = 1
+param["debug"] = True
+if( param["useHalfTrainingData"] == True):
+    xTrainParsed = xTrainParsed[:100]
+
 
 hmmBigram = HmmBigram(xTrainParsed, param)
+
+xDevRaw = LoadRawData("C:\\source\\nlp\\HiddenMarkovModels\\TestData\\twt.dev.json")
+xDevParsed = LoadJsonTokens(xDevRaw)
+
+hmmBigram.FindBestTagSequences(xDevParsed, param)
+
  
