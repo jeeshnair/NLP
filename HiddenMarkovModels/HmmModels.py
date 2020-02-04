@@ -1,5 +1,3 @@
-import math
-
 class HmmBigram(object):
     """A Hmm bigram language model"""
     
@@ -9,8 +7,7 @@ class HmmBigram(object):
         self.TransitionCount = dict()
         self.EmissionCount = dict()
         self.TotalTrainWordCount = 0
-        self.Vocabulary = []
-        self.LowFrequencyWords = []
+        self.Vocabulary = dict()
         self.WordFrequency = dict()
         if(param["debug"]  == True):
             print("Initializing Vocabulary")
@@ -26,11 +23,8 @@ class HmmBigram(object):
         print("word count"," ",len(self.WordFrequency))
         for word in self.WordFrequency:
             if self.WordFrequency[word] > param["oovfrequency"]:
-                if(word not in self.Vocabulary):
-                    self.Vocabulary.append(word)
-            #else:
-            #    if(word not in self.Vocabulary):
-            #        self.Vocabulary.append(word)
+                  self.Vocabulary[word] = self.Vocabulary.get(word,0) + 1
+        print("Vocabular count:",len(self.Vocabulary))
         
     def CountWordsTrain(self, xTrain,param):
         for tokens in xTrain:
@@ -45,62 +39,62 @@ class HmmBigram(object):
         containsPeriod = False
         containsDash = False
         containsDigits = False
+        containsEmoji = False
 
-        #for char in word:
-        #    if char.isdigit():
-        #        numDigits += 1
-        #        containsDigits = True
-        #    if char.isalpha():
-        #        containsAlpha = True
-        #    if char == ",":
-        #        containsComma = True
-        #    if char == "/":
-        #        containsSlash = True
-        #    if char == "-":
-        #        containsDash = True
-        #    if char == ".":
-        #        containsPeriod = True   
-
-        #if(word.isalnum() and containsDigits == True):
-        #    return "containsDigitAndAlpha"
-        #if word.isdigit() and len(word) == 2:
-        #    return 'twoDigitNum'
-        #if word.isdigit() and len(word) == 4:
-        #    return 'fourDigitNum'
-        #if word.isdigit(): #Is a digit
-        #    return 'othernum'
-        #if(containsDigits ==True and containsSlash == True and containsAlpha == False):
-        #    return "containsDigitAndSlash";
-        #if(containsDigits ==True and containsDash == True and containsAlpha == False):
-        #    return "containsDigitAndDash";
-        #if(containsDigits ==True and containsComma == True and containsAlpha == False):
-        #    return "containsDigitAndDash";
-        #if(containsDigits ==True and containsPeriod == True and containsAlpha == False):
-        #    return "containsDigitAndPeriod";
-        #elif digitFraction > 0.5:
-        #    return 'mostlyDigits'
-        #if word.islower(): #All lower case
-        #    return 'lowercase'
-        #elif word.isupper(): #All upper case
-        #    return 'allCaps'
-        #if word[0].isupper(): #is a title, initial char upper, then all lower
-        #    return 'initCap'
-        if word.startswith("@"): #is a title, initial char upper, then all lower
+        for char in word:
+            if char.isalpha():
+                containsAlpha = True
+            if char == ",":
+                containsComma = True
+            if char == "/":
+                containsSlash = True
+            if char == "-":
+                containsDash = True
+            if char == ".":
+                containsPeriod = True 
+            if( char == "\\u"):
+                containsEmoji = True   
+ 
+        if word.startswith("@"): 
             return 'twitterHandle'
-        elif word.startswith("#"):
+        if word.startswith("#"):
             return 'hashTag'
-        elif word.startswith("https"):
+        if word.startswith("\\u"):
+            return 'emoticon'
+        if containsEmoji:
+            return 'containsemoticon'
+        if word.startswith("https"):
             return 'uri'
-        #elif numDigits > 0:
-        #    return 'containsDigits'  
+        if word.islower() and word.isalnum() == True: #All lower case
+            return 'lowercase'
+        if word.isupper() and word.isalnum() == True: #All upper case
+            return 'allCaps'
+        if word[0].isupper(): 
+            return 'initCap'
+        if word.isdigit() and len(word) == 2:
+            return 'twoDigitNum'
+        if word.isdigit() and len(word) == 4:
+            return 'fourDigitNum'
+        if(word.isalnum() and containsDigits == True):
+            return "containsDigitAndAlpha"
+        if word.isdigit():
+            return 'othernum'
+        if(containsDigits ==True and containsSlash == True):
+            return "containsDigitAndSlash";
+        if(containsDigits ==True and containsDash == True):
+            return "containsDigitAndDash";
+        if(containsDigits ==True and containsComma == True):
+            return "containsDigitAndDash";
+        if(containsDigits ==True and containsPeriod == True):
+            return "containsDigitAndPeriod";
         else:
             return "other"
 
     def CalculateCounts(self, xTrain, param):
         for tokens in xTrain:
             for i in range(len(tokens)):
-                if(tokens[i][0] not in self.Vocabulary):
-                    tokens[i][0] = "unk" #self.TranslateToWordClass(tokens[i][0])
+                if(self.Vocabulary.get(tokens[i][0],0) == 0):
+                    tokens[i][0] = self.TranslateToWordClass(tokens[i][0])
                 self.TotalTrainWordCount = self.TotalTrainWordCount + 1
                 self.TagCount[tokens[i][1]] = self.TagCount.get(tokens[i][1],0) + 1
                 self.EmissionCount[(tokens[i][1],tokens[i][0])] = self.EmissionCount.get((tokens[i][1],tokens[i][0]),0) + 1
@@ -124,8 +118,8 @@ class HmmBigram(object):
         return math.log(probabilityWithLinearInterpolation, 2)
 
     def GetEmissionProbability(self, word ,tag, param):
-        if(word in self.LowFrequencyWords):
-            wordClass = "unk" #self.TranslateToWordClass(word)
+        if(self.Vocabulary.get(word,0) == 0):
+            wordClass = self.TranslateToWordClass(word)
             numerator = self.EmissionCount.get((tag,wordClass),0)
         else:
             numerator = self.EmissionCount.get((tag,word),0)
@@ -139,9 +133,12 @@ class HmmBigram(object):
         return math.log(numerator / denominator, 2)
 
     def FindBestTagSequences(self,xDev,param):
+        predictedTags = []
         for tokens in xDev:
             tag = self.FindBestTagSequence(tokens,param)
-            print(tag)
+            predictedTags.append(tag)
+
+        return predictedTags
 
     def FindBestTagSequence(self,tokenizedSentence,param):
 
@@ -172,12 +169,16 @@ class HmmBigram(object):
             if scores[tag][wordCount-1] > scores[tag-1][wordCount-1]:
                 bestTagIndex=tag
 
-        tags = []
+        tagsequence = []
         tagIndex = bestTagIndex
         for t in range(wordCount-1, -1 , -1):
-            tags.append(self.AllTags[tagIndex])
+            wordTagPair = []
+            wordTagPair.append(tokenizedSentence[t][0])
+            wordTagPair.append(self.AllTags[tagIndex])
+            wordTagPair.append(tokenizedSentence[t][1])
+            tagsequence.append(wordTagPair)
             tagIndex = backTrack[tagIndex][t]
 
-        tags.reverse()
+        tagsequence.reverse()
 
-        return tags
+        return tagsequence
