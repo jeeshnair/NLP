@@ -35,8 +35,8 @@ xTrainParsed = LoadJsonTokens(xTrainRaw)
 param = {}
 param["oovfrequency"] = 1
 param["usePartialTrainingData"]  = False
-param["lambda2"]  = 0.7
-param["lambda1"]  = 0.3
+param["lambda2"]  = 0.2
+param["lambda1"]  = 0.8
 param["smoothingfactor"] = .0001
 param["debug"] = True
 if( param["usePartialTrainingData"] == True):
