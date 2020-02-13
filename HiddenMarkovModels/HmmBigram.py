@@ -1,8 +1,7 @@
-from collections import defaultdict
 import math
 
-class HmmTrigram(object):
-    """A Hmm Trigram language model"""
+class HmmBigram(object):
+    """A Hmm bigram language model"""
     
     def __init__(self, xTrain , param):
         self.xTrain = xTrain
@@ -103,29 +102,20 @@ class HmmTrigram(object):
                 self.EmissionCount[(tokens[i][1],tokens[i][0])] = self.EmissionCount.get((tokens[i][1],tokens[i][0]),0) + 1
                 if(i > 0):
                     self.TransitionCount[(tokens[i - 1][1],tokens[i][1])] = self.TransitionCount.get((tokens[i - 1][1],tokens[i][1]),0) + 1
-                if(i > 1):
-                    self.TransitionCount[(tokens[i - 2][1],tokens[i - 1][1],tokens[i][1])] = self.TransitionCount.get((tokens[i - 2][1],tokens[i - 1][1],tokens[i][1]),0) + 1
 
-    def GetTransitionProbability(self, conditionState2 , conditionState1, currentState , param):
+    def GetTransitionProbability(self, conditionState, currentState , param):
         probabilityWithLinearInterpolation = 0
 
-        #Trigram part
-        numerator = self.TransitionCount.get((conditionState2, conditionState1, currentState),0) 
-        denominator = self.TransitionCount.get((conditionState2, conditionState1),0) 
-        if(denominator != 0):
-            probabilityWithLinearInterpolation = probabilityWithLinearInterpolation + (param["lambda1"] * (numerator / denominator))
-
         #bigram part
-        numerator = self.TransitionCount.get((conditionState1, currentState),0) 
-        denominator = self.TagCount.get(conditionState1,0)
-        if(denominator != 0):
-            probabilityWithLinearInterpolation = probabilityWithLinearInterpolation + (param["lambda2"] * (numerator / denominator))
+        numerator = self.TransitionCount.get((conditionState, currentState),0) 
+        denominator = self.TagCount.get(conditionState,0)
+        probabilityWithLinearInterpolation = probabilityWithLinearInterpolation + (param["lambda1"] * (numerator / denominator))
 
         #unigram part
         numerator = self.TagCount.get(currentState) 
         denominator = self.TotalTrainWordCount
-        if(denominator != 0):
-            probabilityWithLinearInterpolation = probabilityWithLinearInterpolation + (param["lambda3"] * (numerator / denominator))
+
+        probabilityWithLinearInterpolation = probabilityWithLinearInterpolation + (param["lambda2"] * (numerator / denominator))
 
         return math.log(probabilityWithLinearInterpolation, 2)
 
@@ -144,12 +134,6 @@ class HmmTrigram(object):
 
         return math.log(numerator / denominator, 2)
 
-    def Tags(self, k):
-        if k in (-1, 0):
-            return {"<st>"}
-        else:
-            return self.AllTags
-
     def FindBestTagSequences(self,xDev,param):
         predictedTags = []
         for tokens in xDev:
@@ -159,46 +143,43 @@ class HmmTrigram(object):
         return predictedTags
 
     def FindBestTagSequence(self,tokenizedSentence,param):
+
         wordCount = len(tokenizedSentence)
         tagCount = len(self.AllTags)
+        scores = []
+        backTrack = []
 
-        pi = defaultdict(float)
-        bp = {}
+        scores = [[float("-infinity") for x in range(wordCount)] for y in range(tagCount)]
+        backTrack = [[0 for x in range(wordCount)] for y in range(tagCount)]
 
-          # Initialization
-        pi[(0, "<st>", "<st>")] = 0
-
-
-        for k in range(1,wordCount+1):
-            for u in self.Tags(k-1):
-                for v in self.Tags(k):
-                    max_score = float('-Inf')
-                    max_tag = None
-                    for w in self.Tags(k - 2):
-                        score = pi[(k-1, w, u)] + self.GetTransitionProbability(w, u,v, param) + self.GetEmissionProbability(tokenizedSentence[k-1][0], v, param)
-                        if score > max_score:
-                            max_score = score
-                            max_tag = w
-                    pi[(k, u, v)] = max_score
-                    bp[(k, u, v)] = max_tag
-
-        max_score = float('-Inf')
-        u_max, v_max = None, None
-        for u in self.Tags(wordCount-1):
-            for v in self.Tags(wordCount):
-                score = pi[(wordCount, u, v)] + self.GetTransitionProbability(u, v, "</st>", param) 
-                if score > max_score:
-                    max_score = score
-                    u_max = u
-                    v_max = v
-
-        tags = []
-        tags.append(v_max)
-        tags.append(u_max)
-
-        for i, k in enumerate(range(wordCount-2, 0, -1)):
-            tags.append(bp[(k+2, tags[i+1], tags[i])])
-        tags.reverse()
+        for tagIndex in range(tagCount):
+            scores[tagIndex][0] = 0
 
 
-        return tags
+        # Start from 1 because the first row belongs to start
+        for word in range(1, wordCount):
+            for currentTag in range(tagCount):
+                for previousTag in range(tagCount):
+                    score = scores[previousTag][word-1] + self.GetTransitionProbability(self.AllTags[previousTag], self.AllTags[currentTag], param) +  self.GetEmissionProbability(tokenizedSentence[word][0], self.AllTags[currentTag], param)
+                    if score > scores[currentTag][word]:
+                      scores[currentTag][word] = score
+                      backTrack[currentTag][word] = previousTag
+
+        bestTagIndex = 0
+        for tag in range(1, tagCount):
+            if scores[tag][wordCount-1] > scores[tag-1][wordCount-1]:
+                bestTagIndex=tag
+
+        tagsequence = []
+        tagIndex = bestTagIndex
+        for t in range(wordCount-1, -1 , -1):
+            wordTagPair = []
+            wordTagPair.append(tokenizedSentence[t][0])
+            wordTagPair.append(self.AllTags[tagIndex])
+            wordTagPair.append(tokenizedSentence[t][1])
+            tagsequence.append(wordTagPair)
+            tagIndex = backTrack[tagIndex][t]
+
+        tagsequence.reverse()
+
+        return tagsequence
