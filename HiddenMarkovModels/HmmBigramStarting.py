@@ -1,11 +1,8 @@
 import os 
 import json
-from HmmModels import HmmBigram 
-import matplotlib.pyplot as plt
+from HmmBigram import HmmBigram 
 from sklearn.metrics import confusion_matrix
 import numpy as np
-from itertools import islice
-import itertools
 
 def LoadRawData(path):
     print("Loading data from: %s" % os.path.abspath(path))
@@ -73,6 +70,10 @@ def print_cm(cm, labels, hide_zeroes=False, hide_diagonal=False, hide_threshold=
                 cell = cell if cm[i, j] > hide_threshold else empty_cell
             print(cell, end=" ")
         print()
+
+cwd = os.getcwd()  # Get the current working directory (cwd)
+files = os.listdir(cwd)  # Get all the files in that directory
+print("Files in %r: %s" % (cwd, files))
 
 xTrainRaw = LoadRawData("twt.bonus.json")
 xTrainParsed = LoadJsonTokens(xTrainRaw)

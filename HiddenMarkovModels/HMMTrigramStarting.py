@@ -3,8 +3,7 @@ import json
 from HMMTrigram import HmmTrigram 
 from sklearn.metrics import confusion_matrix
 import numpy as np
-from itertools import islice
-import itertools
+
 
 def LoadRawData(path):
     print("Loading data from: %s" % os.path.abspath(path))
